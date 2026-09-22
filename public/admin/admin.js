@@ -21,6 +21,177 @@ async function api(method, url, body, { form = false } = {}) {
   return data;
 }
 
+// ---- Backends ---------------------------------------------------------------------
+// "server": the Node server (local or real hosting) — password login, leads, e-mail.
+// "github": GitHub Pages — content/ is edited through the GitHub API with a personal
+//           access token kept in this browser; a GitHub Action rebuilds the site.
+
+const CONFIG = window.FB_CONFIG || { mode: 'server' };
+const GH = CONFIG.mode === 'github';
+const localImages = new Map(); // just-uploaded images, shown before GitHub has them
+
+const b64encode = (str) => bytesToB64(new TextEncoder().encode(str));
+function bytesToB64(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+const b64decode = (b64) => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, '')), (c) => c.charCodeAt(0)));
+
+const gh = {
+  token() {
+    try { return localStorage.getItem('fb-gh-token') || ''; } catch { return ''; }
+  },
+  setToken(t) {
+    try { t ? localStorage.setItem('fb-gh-token', t) : localStorage.removeItem('fb-gh-token'); } catch {}
+  },
+  async req(method, path, body) {
+    const res = await fetch(`https://api.github.com/repos/${CONFIG.repo}${path}`, {
+      method,
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${gh.token()}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = res.status === 204 ? null : await res.json().catch(() => null);
+    if (!res.ok) {
+      const msg = {
+        401: 'Tilgangsnøkkelen er ugyldig eller utløpt.',
+        403: 'Tilgangsnøkkelen mangler tillatelse til dette.',
+        404: 'Fant ikke repoet – har nøkkelen tilgang til det?',
+        409: 'Innholdet er endret et annet sted. Last siden på nytt og prøv igjen.',
+        422: 'GitHub avviste endringen. Last siden på nytt og prøv igjen.',
+      }[res.status] || data?.message || `GitHub-feil (${res.status})`;
+      const err = new Error(msg);
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  },
+};
+
+function notLoggedIn(msg = 'Ikke innlogget') {
+  const err = new Error(msg);
+  err.status = 401;
+  return err;
+}
+
+const fileToB64 = async (file) => bytesToB64(new Uint8Array(await file.arrayBuffer()));
+const uploadName = (file) => `${Date.now()}-${Math.random().toString(16).slice(2, 10)}.${({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/avif': 'avif', 'image/gif': 'gif' })[file.type] || 'jpg'}`;
+
+const backend = GH
+  ? {
+      async me() {
+        if (!gh.token()) throw notLoggedIn();
+        const repo = await gh.req('GET', '').catch((e) => { throw e.status === 401 || e.status === 404 ? notLoggedIn(e.message) : e; });
+        if (!repo.permissions?.push) throw notLoggedIn('Nøkkelen har ikke skrivetilgang til repoet.');
+        return { leads: 0 };
+      },
+      async login(token) {
+        gh.setToken(token.trim());
+        try { await backend.me(); } catch (e) { gh.setToken(''); throw e; }
+      },
+      async logout() { gh.setToken(''); },
+      async getContent() {
+        const f = await gh.req('GET', `/contents/${CONFIG.contentPath}?ref=${encodeURIComponent(CONFIG.branch)}&t=${Date.now()}`);
+        state.contentSha = f.sha;
+        return JSON.parse(b64decode(f.content));
+      },
+      async saveContent(c) {
+        const r = await gh.req('PUT', `/contents/${CONFIG.contentPath}`, {
+          message: 'Innhold oppdatert via admin',
+          content: b64encode(`${JSON.stringify(c, null, 2)}\n`),
+          sha: state.contentSha,
+          branch: CONFIG.branch,
+        });
+        state.contentSha = r.content.sha;
+        watchDeploy();
+        return c;
+      },
+      async upload(file) {
+        const name = uploadName(file);
+        await gh.req('PUT', `/contents/${CONFIG.uploadsPath}/${name}`, { message: `Nytt bilde: ${name}`, content: await fileToB64(file), branch: CONFIG.branch });
+        const url = `/uploads/${name}`;
+        localImages.set(url, URL.createObjectURL(file));
+        return url;
+      },
+    }
+  : {
+      me: () => api('GET', '/api/admin/me'),
+      login: (password) => api('POST', '/api/admin/login', { password }),
+      logout: () => api('POST', '/api/admin/logout'),
+      getContent: () => api('GET', '/api/admin/content'),
+      saveContent: (c) => api('PUT', '/api/admin/content', c),
+      async upload(file) {
+        const fd = new FormData();
+        fd.append('file', file);
+        return (await api('POST', '/api/admin/upload', fd, { form: true })).url;
+      },
+    };
+
+// Where an image URL from content.json can be displayed right now.
+function imageSrc(url) {
+  if (!url) return '';
+  if (localImages.has(url)) return localImages.get(url);
+  if (GH && url.startsWith('/uploads/')) {
+    return `https://raw.githubusercontent.com/${CONFIG.repo}/${CONFIG.branch}/${CONFIG.uploadsPath}${url.slice('/uploads'.length)}`;
+  }
+  return url;
+}
+
+// Shrink big photos before upload (max 2400 px, WebP) so pages load fast and the repo stays small.
+async function prepareImage(file) {
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return file;
+  const bmp = await createImageBitmap(file).catch(() => null);
+  if (!bmp) return file;
+  const scale = Math.min(1, 2400 / Math.max(bmp.width, bmp.height));
+  if (scale === 1 && file.size < 900 * 1024) return file;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bmp.width * scale);
+  canvas.height = Math.round(bmp.height * scale);
+  canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise((r) => canvas.toBlob(r, 'image/webp', 0.85));
+  if (!blob || blob.size >= file.size) return file;
+  return new File([blob], file.name.replace(/\.\w+$/, '.webp'), { type: 'image/webp' });
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Follow the GitHub Action that rebuilds the site after a save.
+let deployWatch = 0;
+async function watchDeploy() {
+  const id = ++deployWatch;
+  const started = Date.now();
+  const set = (text) => { if (id === deployWatch) { state.deploy = text; if (els.topbar) renderTopbar(); } };
+  set('Publiserer …');
+  await sleep(5000);
+  while (id === deployWatch && Date.now() - started < 6 * 60e3) {
+    try {
+      const { workflow_runs: runs } = await gh.req('GET', `/actions/runs?per_page=1&branch=${encodeURIComponent(CONFIG.branch)}`);
+      const run = runs[0];
+      if (run && new Date(run.created_at).getTime() > started - 30e3 && run.status === 'completed') {
+        if (run.conclusion === 'success') {
+          set('Publisert ✓');
+          await sleep(6000);
+          set('');
+        } else if (run.conclusion !== 'cancelled') set('Publisering feilet');
+        return;
+      }
+    } catch {
+      set('Publiseres om ca. 1 min');
+      await sleep(60e3);
+      return set('');
+    }
+    await sleep(5000);
+  }
+}
+
+// ---- DOM helpers -----------------------------------------------------------------
+
 function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
@@ -70,10 +241,13 @@ const state = {
   openSection: null,
   leadsCount: 0,
   showPreview: window.matchMedia('(min-width: 1281px)').matches,
+  contentSha: null,
+  deploy: '',
   device: (() => { try { return localStorage.getItem('fb-preview-device') || 'desktop'; } catch { return 'desktop'; } })(),
 };
 
 function markDirty() {
+  schedulePreview();
   if (!state.dirty) {
     state.dirty = true;
     renderTopbar();
@@ -137,7 +311,7 @@ function imageField(obj, key) {
   const removeBtn = h('button', { type: 'button', class: 'btn sm danger', onclick: () => { obj[key] = ''; url.value = ''; markDirty(); paint(); } }, 'Fjern');
 
   function paint() {
-    const src = obj[key];
+    const src = imageSrc(obj[key]);
     thumb.style.backgroundImage = src ? `url("${src.replace(/"/g, '%22')}")` : '';
     thumb.replaceChildren(src ? '' : icon('fa-regular fa-image'));
     removeBtn.hidden = !src;
@@ -149,9 +323,7 @@ function imageField(obj, key) {
     uploadBtn.disabled = true;
     uploadBtn.lastChild.textContent = 'Laster opp …';
     try {
-      const fd = new FormData();
-      fd.append('file', f);
-      const { url: uploaded } = await api('POST', '/api/admin/upload', fd, { form: true });
+      const uploaded = await backend.upload(await prepareImage(f));
       obj[key] = uploaded;
       url.value = uploaded;
       markDirty();
@@ -557,12 +729,19 @@ const TABS = [
   { id: 'sections', label: 'Seksjoner', icon: 'fa-solid fa-layer-group', view: viewSections },
   { id: 'contact', label: 'Kontaktskjema', icon: 'fa-regular fa-pen-to-square', view: viewContact },
   { id: 'general', label: 'Generelt', icon: 'fa-solid fa-sliders', view: viewGeneral },
-  { group: 'Innboks' },
-  { id: 'leads', label: 'Henvendelser', icon: 'fa-regular fa-envelope-open', view: viewLeads, badge: () => state.leadsCount },
-  { group: 'Innstillinger' },
-  { id: 'email', label: 'E-postvarsling', icon: 'fa-solid fa-bell', view: viewEmail },
-  { id: 'password', label: 'Passord', icon: 'fa-solid fa-key', view: viewPassword },
+  // Leads, e-mail and password need the Node server, so they don't exist on GitHub Pages.
+  ...(GH
+    ? []
+    : [
+        { group: 'Innboks' },
+        { id: 'leads', label: 'Henvendelser', icon: 'fa-regular fa-envelope-open', view: viewLeads, badge: () => state.leadsCount },
+        { group: 'Innstillinger' },
+        { id: 'email', label: 'E-postvarsling', icon: 'fa-solid fa-bell', view: viewEmail },
+        { id: 'password', label: 'Passord', icon: 'fa-solid fa-key', view: viewPassword },
+      ]),
 ];
+
+const SITE_URL = GH ? new URL('../', location.href).href : '/';
 
 // ---- Shell ---------------------------------------------------------------------
 
@@ -571,14 +750,15 @@ let els = {};
 function renderTopbar() {
   els.topbar.replaceChildren(
     ...[
-    h('span', { class: 'logo' }, h('b', null, state.content.settings.logoBold || 'FERRO'), h('i', null, state.content.settings.logoItalic || 'bygget')),
-    h('span', { class: 'lbl', style: 'opacity:.6;font-size:12px' }, 'Administrasjon'),
-    h('span', { class: 'spacer' }),
-    state.dirty && h('span', { class: 'dirty', title: 'Ulagrede endringer' }, icon('fa-solid fa-circle-exclamation'), h('span', { class: 'lbl' }, ' Ulagrede endringer')),
-    h('a', { class: 'btn ghost sm', href: '/', target: '_blank', rel: 'noopener', title: 'Åpne nettsiden' }, icon('fa-solid fa-arrow-up-right-from-square'), h('span', { class: 'lbl' }, 'Åpne nettsiden')),
-    h('button', { type: 'button', class: `btn ghost sm${state.showPreview ? ' on' : ''}`, title: 'Forhåndsvisning', onclick: () => { state.showPreview = !state.showPreview; renderBodyLayout(); } }, icon('fa-regular fa-eye'), h('span', { class: 'lbl' }, 'Forhåndsvisning')),
-    h('button', { type: 'button', class: 'btn primary', disabled: !state.dirty, onclick: save }, icon('fa-solid fa-floppy-disk'), h('span', { class: 'lbl-sm' }, 'Lagre og publiser'), h('span', { class: 'lbl-xs' }, 'Lagre')),
-    h('button', { type: 'button', class: 'btn ghost sm', title: 'Logg ut', onclick: logout }, icon('fa-solid fa-right-from-bracket')),
+      h('span', { class: 'logo' }, h('b', null, state.content.settings.logoBold || 'FERRO'), h('i', null, state.content.settings.logoItalic || 'bygget')),
+      h('span', { class: 'lbl', style: 'opacity:.6;font-size:12px' }, 'Administrasjon'),
+      h('span', { class: 'spacer' }),
+      state.deploy && h('span', { class: 'deploy' }, state.deploy),
+      state.dirty && h('span', { class: 'dirty', title: 'Ulagrede endringer' }, icon('fa-solid fa-circle-exclamation'), h('span', { class: 'lbl' }, ' Ulagrede endringer')),
+      h('a', { class: 'btn ghost sm', href: SITE_URL, target: '_blank', rel: 'noopener', title: 'Åpne nettsiden' }, icon('fa-solid fa-arrow-up-right-from-square'), h('span', { class: 'lbl' }, 'Åpne nettsiden')),
+      h('button', { type: 'button', class: `btn ghost sm${state.showPreview ? ' on' : ''}`, title: 'Forhåndsvisning', onclick: () => { state.showPreview = !state.showPreview; renderBodyLayout(); } }, icon('fa-regular fa-eye'), h('span', { class: 'lbl' }, 'Forhåndsvisning')),
+      h('button', { type: 'button', class: 'btn primary', disabled: !state.dirty || state.saving, onclick: save }, icon('fa-solid fa-floppy-disk'), h('span', { class: 'lbl-sm' }, state.saving ? 'Lagrer …' : 'Lagre og publiser'), h('span', { class: 'lbl-xs' }, 'Lagre')),
+      h('button', { type: 'button', class: 'btn ghost sm', title: 'Logg ut', onclick: logout }, icon('fa-solid fa-right-from-bracket')),
     ].filter(Boolean),
   );
 }
@@ -595,7 +775,7 @@ function renderSidebar() {
 }
 
 function renderMain() {
-  const tab = TABS.find((t) => t.id === state.tab);
+  const tab = TABS.find((t) => t.id === state.tab) || TABS[1];
   const scroll = els.main.scrollTop;
   els.main.replaceChildren(...tab.view());
   els.main.scrollTop = scroll;
@@ -610,9 +790,8 @@ function renderBodyLayout() {
 }
 
 // ---- Device preview --------------------------------------------------------------
-// The site is rendered at the real device width inside the iframe and scaled down to
-// fit the panel, so "Desktop" really shows the desktop layout, and iPad/Mobil the
-// responsive layouts.
+// The page is rendered in the browser from the current (unsaved) content with the same
+// renderer the server uses, shown at the real device width and scaled to fit the panel.
 
 const DEVICES = {
   desktop: { label: 'Desktop', icon: 'fa-solid fa-desktop', w: 1440, h: 900 },
@@ -648,7 +827,7 @@ function fitPreview() {
 
 // Phones and iPads use overlay scrollbars, so the desktop scrollbar is hidden in those previews.
 function hidePreviewScrollbar() {
-  const doc = els.iframe.contentDocument;
+  const doc = els.iframe?.contentDocument;
   if (!doc?.head) return;
   let style = doc.getElementById('fb-preview-style');
   if (!style) {
@@ -672,11 +851,57 @@ function renderDeviceSwitch() {
   );
 }
 
+// Inside the preview: no reveal animations (they would replay on every keystroke), and
+// links scroll within the preview instead of navigating away.
+const PREVIEW_CSS =
+  '.js .reveal-up,.js .stagger-parent .stagger-child{opacity:1!important;transform:none!important;transition:none!important}' +
+  '.js .image-reveal-wrap{clip-path:none!important;transition:none!important}.image-reveal-wrap img{transform:none!important}';
+const PREVIEW_JS = `document.addEventListener('click', function (e) {
+  var a = e.target.closest('a[href]'); if (!a) return;
+  e.preventDefault();
+  var href = a.getAttribute('href');
+  if (href.charAt(0) !== '#') return;
+  var t = href === '#top' ? document.body : document.getElementById(href.slice(1));
+  if (t) t.scrollIntoView({ behavior: 'smooth' });
+}, true);
+document.addEventListener('submit', function (e) { e.preventDefault(); }, true);`;
+
+let renderPageFn = null;
+let previewTimer;
+
+function previewHtml() {
+  const base = GH ? SITE_URL : `${location.origin}/`;
+  return renderPageFn(state.content, { staticSite: true })
+    .replace(/(["(])\/assets\//g, `$1${base}assets/`)
+    .replace(/(["(])(\/uploads\/[\w.-]+)/g, (m, p, url) => p + imageSrc(url))
+    .replace('</head>', `<style>${PREVIEW_CSS}</style></head>`)
+    .replace('</body>', `<script>${PREVIEW_JS}<\/script></body>`);
+}
+
+function updatePreview() {
+  if (!renderPageFn || !els.iframe) return;
+  const y = els.iframe.contentWindow?.scrollY || 0;
+  els.iframe.addEventListener('load', () => {
+    els.iframe.contentWindow?.scrollTo(0, y);
+    hidePreviewScrollbar();
+  }, { once: true });
+  try {
+    els.iframe.srcdoc = previewHtml();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(updatePreview, 400);
+}
+
 function scrollPreview(anchor) {
   const go = () => {
     const target = els.iframe.contentDocument?.getElementById(anchor);
     if (target) target.scrollIntoView({ behavior: 'smooth' });
-    else toast('Seksjonen vises ikke (skjult eller ikke lagret ennå)');
+    else toast('Seksjonen er skjult');
   };
   if (!state.showPreview) {
     state.showPreview = true;
@@ -685,30 +910,28 @@ function scrollPreview(anchor) {
   } else go();
 }
 
-function reloadPreview() {
-  const win = els.iframe.contentWindow;
-  const y = win?.scrollY || 0;
-  els.iframe.addEventListener('load', () => els.iframe.contentWindow.scrollTo(0, y), { once: true });
-  win?.location.reload();
-}
-
 async function save() {
+  if (state.saving) return;
+  state.saving = true;
+  renderTopbar();
   try {
-    state.content = await api('PUT', '/api/admin/content', state.content);
+    state.content = await backend.saveContent(state.content);
     state.dirty = false;
-    renderTopbar();
     renderMain();
-    reloadPreview();
-    toast('Lagret og publisert');
+    updatePreview();
+    toast(GH ? 'Lagret – nettsiden oppdateres om ca. ett minutt' : 'Lagret og publisert');
   } catch (err) {
     if (err.status === 401) return renderLogin('Du er logget ut. Logg inn igjen – endringene dine er ikke lagret ennå.');
     toast(err.message, true);
+  } finally {
+    state.saving = false;
+    if (els.topbar) renderTopbar();
   }
 }
 
 async function logout() {
   if (state.dirty && !confirm('Du har ulagrede endringer. Logge ut likevel?')) return;
-  await api('POST', '/api/admin/logout');
+  await backend.logout();
   state.dirty = false;
   renderLogin();
 }
@@ -725,7 +948,7 @@ function renderApp() {
   els.topbar = h('header', { class: 'topbar' });
   els.sidebar = h('nav', { class: 'sidebar' });
   els.main = h('main', { class: 'main' });
-  els.iframe = h('iframe', { src: '/', title: 'Forhåndsvisning' });
+  els.iframe = h('iframe', { title: 'Forhåndsvisning' });
   els.device = h('div', { class: 'device' }, els.iframe);
   els.stage = h('div', { class: 'preview-stage' }, els.device);
   els.devices = h('div', { class: 'segmented' });
@@ -735,29 +958,46 @@ function renderApp() {
       els.devices,
       els.sizeLabel,
       h('span', { class: 'spacer' }),
-      h('button', { type: 'button', class: 'icon-btn', title: 'Last inn på nytt', onclick: reloadPreview }, icon('fa-solid fa-rotate-right')),
+      h('button', { type: 'button', class: 'icon-btn', title: 'Oppdater forhåndsvisning', onclick: updatePreview }, icon('fa-solid fa-rotate-right')),
       h('button', { type: 'button', class: 'icon-btn preview-close', title: 'Lukk forhåndsvisning', onclick: () => { state.showPreview = false; renderBodyLayout(); } }, icon('fa-solid fa-xmark'))),
     els.stage,
-    h('div', { class: 'preview-note' }, 'Viser lagret versjon – trykk «Lagre» for å se endringene.'));
+    h('div', { class: 'preview-note' }, 'Forhåndsvisningen oppdateres mens du skriver. Trykk «Lagre» for å publisere.'));
   new ResizeObserver(fitPreview).observe(els.stage);
-  els.iframe.addEventListener('load', hidePreviewScrollbar);
   renderDeviceSwitch();
   els.body = h('div', { class: 'body' }, els.sidebar, els.main, els.preview);
   app.replaceChildren(h('div', { class: 'shell' }, els.topbar, els.body));
   renderBodyLayout();
   renderSidebar();
   renderMain();
+  updatePreview();
 }
 
 function renderLogin(message = '') {
   els = {};
-  const pw = h('input', { class: 'inp', type: 'password', autocomplete: 'current-password', autofocus: true, placeholder: 'Passord' });
+  const secret = h('input', {
+    class: 'inp',
+    type: 'password',
+    autocomplete: GH ? 'off' : 'current-password',
+    autofocus: true,
+    placeholder: GH ? 'github_pat_…' : 'Passord',
+  });
   const err = h('p', { class: 'error' }, message);
+  const help = GH
+    ? h('div', { class: 'login-help' },
+        h('p', null, 'Første gang: lag en tilgangsnøkkel på GitHub (kun du trenger den, den lagres bare i denne nettleseren):'),
+        h('ol', null,
+          h('li', null, 'Åpne ', h('a', { href: 'https://github.com/settings/personal-access-tokens/new', target: '_blank', rel: 'noopener' }, 'github.com → Fine-grained token'), '.'),
+          h('li', null, 'Navn: «Ferrobygget admin». Utløp: f.eks. 90 dager.'),
+          h('li', null, 'Repository access: ', h('b', null, 'Only select repositories'), ' → ', h('b', null, CONFIG.repo.split('/')[1]), '.'),
+          h('li', null, 'Permissions → Repository: ', h('b', null, 'Contents: Read and write'), ' og ', h('b', null, 'Actions: Read-only'), '.'),
+          h('li', null, 'Trykk «Generate token», kopier og lim inn her.'),
+        ))
+    : null;
   const form = h('form', { onsubmit: async (e) => {
     e.preventDefault();
     err.textContent = '';
     try {
-      await api('POST', '/api/admin/login', { password: pw.value });
+      await backend.login(secret.value);
       await boot();
     } catch (ex) {
       err.textContent = ex.message;
@@ -765,23 +1005,27 @@ function renderLogin(message = '') {
   } },
     h('h1', null, h('span', { class: 'logo' }, h('b', null, 'FERRO'), h('i', null, 'bygget'))),
     h('p', null, 'Administrasjon av nettsiden'),
-    field('Passord', pw),
+    field(GH ? 'GitHub-tilgangsnøkkel' : 'Passord', secret),
     h('button', { type: 'submit', class: 'btn dark', style: 'width:100%' }, 'Logg inn'),
     err,
+    help,
   );
   document.getElementById('app').replaceChildren(h('div', { class: 'login' }, form));
-  pw.focus();
+  secret.focus();
 }
 
 async function boot() {
   try {
-    const me = await api('GET', '/api/admin/me');
+    const [me] = await Promise.all([
+      backend.me(),
+      import('./render.js').then((m) => (renderPageFn = m.renderPage)),
+    ]);
     const unsaved = state.dirty ? state.content : null;
-    state.content = unsaved || (await api('GET', '/api/admin/content'));
+    state.content = unsaved || (await backend.getContent());
     state.leadsCount = me.leads;
     renderApp();
   } catch (err) {
-    if (err.status === 401) renderLogin();
+    if (err.status === 401) renderLogin(err.message === 'Ikke innlogget' ? '' : err.message);
     else document.getElementById('app').replaceChildren(h('p', { class: 'error', style: 'padding:40px' }, err.message));
   }
 }

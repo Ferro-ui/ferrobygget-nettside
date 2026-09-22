@@ -20,6 +20,9 @@ app.use(express.json({ limit: '1mb' }));
 
 app.use('/uploads', express.static(store.UPLOAD_DIR, { maxAge: '30d' }));
 app.use('/assets', express.static(path.join(__dirname, 'public/assets')));
+// The admin renders its live preview in the browser with the same renderer as the server.
+app.get('/admin/config.js', (req, res) => res.type('js').send("window.FB_CONFIG = { mode: 'server' };\n"));
+app.get('/admin/render.js', (req, res) => res.sendFile(path.join(__dirname, 'lib/render.js')));
 app.use('/admin', express.static(path.join(__dirname, 'public/admin')));
 
 app.get('/', (req, res) => {

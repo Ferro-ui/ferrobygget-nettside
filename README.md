@@ -28,38 +28,43 @@ Vil du bestemme passordet selv ved første oppstart: `ADMIN_PASSWORD=ditt-passor
 | E-postvarsling | Mottakere og SMTP-oppsett, med testknapp. Av som standard – henvendelser lagres uansett |
 | Passord | Bytt admin-passord (logger ut andre enheter) |
 
-Endringer publiseres når du trykker **Lagre og publiser** (eller Cmd/Ctrl + S). Forhåndsvisningen viser den lagrede versjonen, og kan byttes mellom **Desktop**, **iPad** og **Mobil** for å se hvordan siden ser ut på hver skjerm.
+Endringer publiseres når du trykker **Lagre og publiser** (eller Cmd/Ctrl + S). Forhåndsvisningen oppdateres mens du skriver (før du lagrer), og kan byttes mellom **Desktop**, **iPad** og **Mobil** for å se hvordan siden ser ut på hver skjerm.
 
 Administrasjonspanelet fungerer også på iPad og mobil: der åpnes forhåndsvisningen i fullskjerm via øye-knappen øverst.
 
-## Publisering på GitHub Pages (midlertidig)
+## GitHub Pages (midlertidig)
 
-Nettsiden ligger foreløpig på **https://ferro-ui.github.io/ferrobygget-nettside/** som en statisk kopi fra mappen `docs/`. GitHub Pages har ingen server, så der gjelder:
+- Nettside: **https://ferro-ui.github.io/ferrobygget-nettside/**
+- Admin: **https://ferro-ui.github.io/ferrobygget-nettside/admin/**
 
-- Administrasjonen brukes lokalt (`npm start` → http://localhost:3000/admin).
-- Skjemaet «Meld interesse» åpner en ferdig utfylt e-post til adressen under **Generelt → E-post**, i stedet for å lagre henvendelsen.
+Admin på GitHub Pages lagrer endringene direkte i repoet (`content/`). GitHub Actions bygger nettsiden på nytt automatisk, og etter ca. ett minutt er endringene ute. Status («Publiserer …» / «Publisert ✓») vises øverst i admin.
 
-Slik oppdaterer du nettsiden etter endringer i admin:
+**Innlogging:** i stedet for passord brukes en personlig GitHub-tilgangsnøkkel. Den lagres kun i nettleseren du logger inn fra. Slik lager du den:
 
-```bash
-npm run export
-git add -A && git commit -m "Oppdatert innhold"
-git push
-```
+1. Gå til https://github.com/settings/personal-access-tokens/new
+2. Navn: «Ferrobygget admin», velg utløpsdato.
+3. Repository access → **Only select repositories** → `ferrobygget-nettside`.
+4. Permissions → Repository → **Contents: Read and write** og **Actions: Read-only**.
+5. «Generate token», kopier og lim inn på innloggingssiden.
 
-Etter ca. ett minutt er endringene ute. Når siden flyttes til en ordentlig server, fungerer admin, lagring av henvendelser og e-postvarsling direkte – `docs/` trengs da ikke lenger.
+**Begrensninger på GitHub Pages** (ingen server):
+
+- Henvendelser, e-postvarsling og passord finnes ikke. Skjemaet «Meld interesse» åpner i stedet en ferdig utfylt e-post til adressen under **Generelt → E-post**.
+- Forhåndsvisningen i admin oppdateres mens du skriver – også før du lagrer.
+
+**Lokalt og på GitHub samtidig:** innholdet ligger i `content/content.json` og `content/uploads/`. Har du endret noe på GitHub Pages, kjør `git pull` før du jobber lokalt. Endringer gjort lokalt publiseres med `git add -A && git commit -m "…" && git push`.
+
+`npm run export` bygger den samme statiske siden i `_site/` hvis du vil sjekke den lokalt.
 
 ## Data og sikkerhetskopi
 
-Alt innhold ligger i mappen `data/` (ikke i Git):
+- `content/` (i Git): `content.json` med alt innholdet på nettsiden, og `uploads/` med opplastede bilder. Historikken i Git fungerer som sikkerhetskopi.
+- `data/` (ikke i Git – inneholder hemmeligheter):
+  - `leads.json` – henvendelser fra skjemaet
+  - `private.json` – passord (kryptert), e-postoppsett og nøkkel for innlogging
+  - `backups/` – de 30 siste versjonene av `content.json` ved lagring via lokal admin
 
-- `content.json` – alt innholdet på nettsiden
-- `leads.json` – henvendelser fra skjemaet
-- `private.json` – passord (kryptert), e-postoppsett og nøkkel for innlogging
-- `uploads/` – opplastede bilder
-- `backups/` – de 30 siste versjonene av `content.json`, lages automatisk ved hver lagring
-
-Ta sikkerhetskopi av hele `data/`-mappen. Plasseringen kan endres med `DATA_DIR=/sti/til/data`.
+Plasseringen kan endres med `CONTENT_DIR=…` og `DATA_DIR=…`.
 
 ## Drift
 
@@ -79,10 +84,13 @@ Ta sikkerhetskopi av hele `data/`-mappen. Plasseringen kan endres med `DATA_DIR=
 server.js                 Express-server og API
 lib/render.js             Bygger nettsiden fra content.json
 lib/schema.js             Validerer og renser innhold fra admin
-lib/store.js              Lagring i data/
+lib/store.js              Lagring i content/ og data/
 lib/auth.js               Innlogging (signert cookie) og rate limiting
 lib/mail.js               E-postvarsling (nodemailer)
 lib/default-content.js    Startinnhold
 public/assets/            CSS/JS for nettsiden
-public/admin/             Administrasjonspanelet
+public/admin/             Administrasjonspanelet (server- og GitHub-modus)
+scripts/export.js         Bygger statisk side + admin til _site/
+.github/workflows/        Publiserer til GitHub Pages ved hver endring
+content/                  Innhold og bilder
 ```

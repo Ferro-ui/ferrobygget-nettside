@@ -1,0 +1,259 @@
+{
+  "settings": {
+    "metaTitle": "Ferrobygget – Ditt eget kontor. Et større fellesskap.",
+    "metaDescription": "Kontorfellesskap på Ulefoss. Møblerte kontorer med egen låsbar dør, 24/7-tilgang, møterom og et levende fellesskap.",
+    "logoBold": "FERRO",
+    "logoItalic": "bygget",
+    "navCta": {
+      "text": "Meld interesse",
+      "link": "#kontakt"
+    },
+    "spacing": "normal",
+    "address": "Ulefossvegen XX, 3830 Ulefoss",
+    "email": "post@ferrobygget.no",
+    "phone": "+47 00 00 00 00",
+    "social": {
+      "linkedin": "#",
+      "facebook": "#",
+      "instagram": "#"
+    }
+  },
+  "hero": {
+    "navLabel": "Hjem",
+    "titleLine1": "Ditt eget kontor.",
+    "titleLine2": "Et større fellesskap.",
+    "subtitle": "Du får privatlivet og profesjonaliteten ved ditt eget kontor – uten ulempene ved å drive et helt kontor alene.",
+    "button": {
+      "text": "Meld interesse",
+      "link": "#kontakt"
+    },
+    "secondaryLinkText": "Se mer",
+    "image": "/uploads/1790081536183-90aaeba8.jpg",
+    "stats": [
+      {
+        "icon": "fa-regular fa-building",
+        "text": "21 kontorer"
+      },
+      {
+        "icon": "fa-solid fa-user-group",
+        "text": "Fullt hus"
+      },
+      {
+        "icon": "fa-solid fa-location-dot",
+        "text": "Ulefoss, Nome"
+      },
+      {
+        "icon": "fa-solid fa-seedling",
+        "text": "Nå planlegger vi plass til flere"
+      }
+    ]
+  },
+  "sections": [
+    {
+      "id": "kontor01",
+      "type": "split",
+      "enabled": true,
+      "navLabel": "Ditt kontor",
+      "anchor": "kontor",
+      "theme": "light",
+      "title": "Ditt eget kontor",
+      "text": "Møblert kontor, egen låsbar dør og 24/7-tilgang. Profesjonelle omgivelser som gir ro til å jobbe – og friheten til å vokse.",
+      "button": {
+        "text": "Se kontorløsninger",
+        "link": "#kontakt"
+      },
+      "image": "/uploads/1790082169135-b285d61b.jpg",
+      "imageAlt": "Kontor i Ferrobygget",
+      "imagePosition": "right",
+      "items": [
+        {
+          "icon": "fa-solid fa-expand",
+          "text": "10–20 m²"
+        },
+        {
+          "icon": "fa-solid fa-couch",
+          "text": "Møblert"
+        },
+        {
+          "icon": "fa-solid fa-lock",
+          "text": "Låsbar dør"
+        },
+        {
+          "icon": "fa-regular fa-clock",
+          "text": "24/7 tilgang"
+        }
+      ],
+      "cards": []
+    },
+    {
+      "id": "fasil02",
+      "type": "icons",
+      "enabled": true,
+      "navLabel": "Fasiliteter",
+      "anchor": "fasiliteter",
+      "theme": "dark",
+      "title": "Uten alt styret",
+      "text": "Vi tar oss av det praktiske, så du kan bruke tiden på din egen virksomhet. Felleskostnader dekker blant annet strøm, internett, renhold, kaffe, printer, møterom og drift av fellesarealene.",
+      "button": {
+        "text": "Se alle fasiliteter",
+        "link": "#kontakt"
+      },
+      "image": "",
+      "imageAlt": "",
+      "imagePosition": "right",
+      "items": [
+        {
+          "icon": "fa-solid fa-people-group",
+          "text": "Møterom"
+        },
+        {
+          "icon": "fa-solid fa-wifi",
+          "text": "Internett"
+        },
+        {
+          "icon": "fa-solid fa-mug-hot",
+          "text": "Kaffe"
+        },
+        {
+          "icon": "fa-solid fa-print",
+          "text": "Printer"
+        },
+        {
+          "icon": "fa-solid fa-broom",
+          "text": "Renhold"
+        },
+        {
+          "icon": "fa-solid fa-square-parking",
+          "text": "Parkering"
+        },
+        {
+          "icon": "fa-solid fa-bolt",
+          "text": "Elbillading"
+        },
+        {
+          "icon": "fa-solid fa-shirt",
+          "text": "Garderobe"
+        }
+      ],
+      "cards": []
+    },
+    {
+      "id": "felles03",
+      "type": "split",
+      "enabled": true,
+      "navLabel": "Fellesskap",
+      "anchor": "fellesskap",
+      "theme": "light",
+      "title": "Et større fellesskap",
+      "text": "Hos oss blir du en del av et levende kontorfellesskap med flinke folk, gode samtaler og nye muligheter. Vi arrangerer blant annet fagfrokost, spillkvelder, sommerfest og julebord – og mye annet spontant.",
+      "button": {
+        "text": "Bli kjent med fellesskapet",
+        "link": "#kontakt"
+      },
+      "image": "/uploads/1790082190176-cda0d9be.jpg",
+      "imageAlt": "Fellesskap i Ferrobygget",
+      "imagePosition": "left",
+      "items": [
+        {
+          "icon": "fa-regular fa-lightbulb",
+          "text": "Faglig inspirasjon"
+        },
+        {
+          "icon": "fa-solid fa-users-line",
+          "text": "Sosiale arrangementer"
+        },
+        {
+          "icon": "fa-solid fa-network-wired",
+          "text": "Samarbeid på tvers"
+        },
+        {
+          "icon": "fa-regular fa-heart",
+          "text": "Et inkluderende miljø"
+        }
+      ],
+      "cards": []
+    },
+    {
+      "id": "ulefo04",
+      "type": "cards",
+      "enabled": true,
+      "navLabel": "Ulefoss",
+      "anchor": "ulefoss",
+      "theme": "white",
+      "title": "Midt i det som skjer på Ulefoss",
+      "text": "Ferrobygget ligger sentralt på Ulefoss, tett på utviklingen rundt Fensfeltet. For bedrifter som allerede jobber mot Fensfeltet – eller ønsker å posisjonere seg for mulighetene som kan komme – gir Ferrobygget en naturlig base.",
+      "button": {
+        "text": "Les mer om området",
+        "link": "#kontakt"
+      },
+      "image": "/uploads/1790082400736-5221e2ea.jpg",
+      "imageAlt": "Ulefoss",
+      "imagePosition": "right",
+      "items": [],
+      "cards": [
+        {
+          "title": "Fensfeltet",
+          "text": "Et viktig område for fremtidens industri og grønne verdikjeder.",
+          "linkText": "Les mer",
+          "link": "#"
+        },
+        {
+          "title": "Fensenteret",
+          "text": "er allerede en del av Ferrobygget.",
+          "linkText": "",
+          "link": ""
+        }
+      ]
+    },
+    {
+      "id": "neste05",
+      "type": "split",
+      "enabled": true,
+      "navLabel": "Neste byggetrinn",
+      "anchor": "neste",
+      "theme": "dark",
+      "title": "Plass til flere",
+      "text": "Vi planlegger neste byggetrinn med rundt 30 nye kontorer, flere møterom og en konferansedel på taket. Meld din interesse i dag – og vær med på å forme fremtidens arbeidsplass på Ulefoss.",
+      "button": {
+        "text": "Meld interesse for neste byggetrinn",
+        "link": "#kontakt"
+      },
+      "image": "/uploads/1790082600492-dbd8be8b.png",
+      "imageAlt": "Neste byggetrinn",
+      "imagePosition": "left",
+      "items": [
+        {
+          "icon": "fa-regular fa-building",
+          "text": "~30 nye kontorer"
+        },
+        {
+          "icon": "fa-solid fa-people-group",
+          "text": "Flere møterom"
+        },
+        {
+          "icon": "fa-solid fa-mountain",
+          "text": "Konferansedel på taket"
+        },
+        {
+          "icon": "fa-regular fa-calendar-check",
+          "text": "Planlagt prosjektering høsten 2026"
+        }
+      ],
+      "cards": []
+    }
+  ],
+  "contact": {
+    "anchor": "kontakt",
+    "title": "Interessert?",
+    "text": "Fyll ut skjemaet, så holder vi deg oppdatert.\nHelt uforpliktende!",
+    "buttonText": "Meld interesse",
+    "successText": "Takk! Vi har mottatt din interesse og tar kontakt.",
+    "messagePlaceholder": "Hva driver dere med? (valgfritt)",
+    "employeeOptions": [
+      "1",
+      "2–5",
+      "6–10",
+      "11+"
+    ]
+  }
+}
