@@ -61,7 +61,9 @@ const gh = {
     if (!res.ok) {
       const msg = {
         401: 'Tilgangsnøkkelen er ugyldig eller utløpt.',
-        403: 'Tilgangsnøkkelen mangler tillatelse til dette.',
+        403: method === 'GET'
+          ? 'Tilgangsnøkkelen mangler lesetilgang.'
+          : 'Tilgangsnøkkelen har bare lesetilgang. Rediger nøkkelen på github.com/settings/personal-access-tokens og sett «Contents» til «Read and write».',
         404: 'Fant ikke repoet – har nøkkelen tilgang til det?',
         409: 'Innholdet er endret et annet sted. Last siden på nytt og prøv igjen.',
         422: 'GitHub avviste endringen. Last siden på nytt og prøv igjen.',
@@ -222,7 +224,7 @@ function toast(msg, isError = false) {
   el.textContent = msg;
   el.className = `show${isError ? ' err' : ''}`;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (el.className = ''), 3200);
+  toastTimer = setTimeout(() => (el.className = ''), isError ? 9000 : 3200);
 }
 
 const move = (arr, i, d) => {

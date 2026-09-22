@@ -208,3 +208,4 @@ td.msg { max-width: 320px; color: var(--muted); }
 .login-help li { margin-bottom: 4px; }
 .login-help a { color: var(--accent-hover); }
 .topbar .deploy { font-size: 12px; color: #d9c2a6; white-space: nowrap; }
+#toast { max-width: min(92vw, 560px); text-align: center; line-height: 1.45; border-radius: 18px; }
