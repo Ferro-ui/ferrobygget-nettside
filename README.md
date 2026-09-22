@@ -32,6 +32,23 @@ Endringer publiseres når du trykker **Lagre og publiser** (eller Cmd/Ctrl + S).
 
 Administrasjonspanelet fungerer også på iPad og mobil: der åpnes forhåndsvisningen i fullskjerm via øye-knappen øverst.
 
+## Publisering på GitHub Pages (midlertidig)
+
+Nettsiden ligger foreløpig på **https://ferro-ui.github.io/ferrobygget-nettside/** som en statisk kopi fra mappen `docs/`. GitHub Pages har ingen server, så der gjelder:
+
+- Administrasjonen brukes lokalt (`npm start` → http://localhost:3000/admin).
+- Skjemaet «Meld interesse» åpner en ferdig utfylt e-post til adressen under **Generelt → E-post**, i stedet for å lagre henvendelsen.
+
+Slik oppdaterer du nettsiden etter endringer i admin:
+
+```bash
+npm run export
+git add -A && git commit -m "Oppdatert innhold"
+git push
+```
+
+Etter ca. ett minutt er endringene ute. Når siden flyttes til en ordentlig server, fungerer admin, lagring av henvendelser og e-postvarsling direkte – `docs/` trengs da ikke lenger.
+
 ## Data og sikkerhetskopi
 
 Alt innhold ligger i mappen `data/` (ikke i Git):
