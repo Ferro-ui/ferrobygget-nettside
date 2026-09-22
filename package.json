@@ -1,0 +1,21 @@
+{
+  "name": "ferrobygget",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ferrobygget – landingsside med administrasjonspanel",
+  "type": "module",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "export": "node scripts/export.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^2.0.2",
+    "nodemailer": "^7.0.6"
+  }
+}
